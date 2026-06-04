@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
 import { extractTextFromImage } from '@/lib/ocr';
 import { extractTextFromPDF } from '@/lib/pdfParser';
 import { promises as fs } from 'fs';
@@ -38,20 +39,29 @@ export async function POST(
       });
     }
 
-    const fullPath = path.join(process.cwd(), report.filePath);
+    const filename = report.filePath.replace('/uploads/', '');
 
-    // Verify file exists
+    // Read file from Supabase Storage
+    let fileBuffer: Buffer;
     try {
-      await fs.access(fullPath);
-    } catch {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('medical-reports')
+        .download(filename);
+
+      if (downloadError || !fileData) {
+        throw new Error(downloadError?.message || 'File not found in storage');
+      }
+
+      const arrayBuffer = await fileData.arrayBuffer();
+      fileBuffer = Buffer.from(arrayBuffer);
+    } catch (err: any) {
+      console.error('Failed to download file from Supabase for OCR:', err);
       return NextResponse.json({
         success: false,
-        error: 'Uploaded file could not be found on server disk. Please provide manual transcript.'
+        error: `Uploaded file could not be found in cloud storage: ${err.message}. Please provide manual transcript.`
       });
     }
 
-    // Read file
-    const fileBuffer = await fs.readFile(fullPath);
     let extractedText = '';
 
     // Determine type
@@ -64,7 +74,7 @@ export async function POST(
       if (isPDF) {
         extractedText = await extractTextFromPDF(fileBuffer);
       } else if (isImage) {
-        extractedText = await extractTextFromImage(fullPath); // Tesseract can read directly from path
+        extractedText = await extractTextFromImage(fileBuffer); // Tesseract can read directly from buffer
       } else {
         return NextResponse.json({
           success: false,

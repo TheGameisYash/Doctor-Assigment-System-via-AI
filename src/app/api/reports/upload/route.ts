@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -69,19 +70,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid file type. Only JPG, PNG, and PDF are allowed.' }, { status: 400 });
       }
 
-      // Save file locally
+      // Upload file to Supabase Storage
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
 
-      const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
-      // Ensure directory exists
-      await fs.mkdir(uploadDir, { recursive: true });
-
       const fileExtension = file.name.split('.').pop() || '';
       const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExtension}`;
-      const fullPath = path.join(uploadDir, uniqueFileName);
 
-      await fs.writeFile(fullPath, buffer);
+      const { error: uploadError } = await supabase.storage
+        .from('medical-reports')
+        .upload(uniqueFileName, buffer, {
+          contentType: file.type,
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Supabase upload error:', uploadError);
+        return NextResponse.json({ error: `Supabase upload failed: ${uploadError.message}. Make sure you added storage policies to the bucket.` }, { status: 500 });
+      }
+
       filePath = `/uploads/${uniqueFileName}`;
     }
 

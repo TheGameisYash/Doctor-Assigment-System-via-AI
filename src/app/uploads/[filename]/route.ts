@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { supabase } from '@/lib/supabaseClient';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -42,18 +43,18 @@ export async function GET(
     }
     // ADMIN has full access
 
-    // Resolve file on disk
-    const uploadDir = path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads');
-    const fullPath = path.join(uploadDir, filename);
+    // Fetch file from Supabase Storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('medical-reports')
+      .download(filename);
 
-    try {
-      await fs.access(fullPath);
-    } catch {
-      return NextResponse.json({ error: 'Physical file not found on disk.' }, { status: 404 });
+    if (downloadError || !fileData) {
+      console.error('Supabase download error:', downloadError);
+      return NextResponse.json({ error: 'Physical file not found in cloud storage.' }, { status: 404 });
     }
 
-    // Read file
-    const fileBuffer = await fs.readFile(fullPath);
+    const arrayBuffer = await fileData.arrayBuffer();
+    const fileBuffer = Buffer.from(arrayBuffer);
 
     // Determine correct content type
     let contentType = 'application/octet-stream';

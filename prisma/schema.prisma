@@ -1,0 +1,83 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String
+  role           String          // "PATIENT" | "ADMIN" | "DOCTOR"
+  createdAt      DateTime        @default(now())
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+}
+
+model PatientProfile {
+  id        String          @id @default(uuid())
+  userId    String          @unique
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  age       Int
+  gender    String
+  phone     String
+  reports   PatientReport[]
+}
+
+model DoctorProfile {
+  id             String             @id @default(uuid())
+  userId         String             @unique
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  category       String             // "General Physician" | "Cardiologist" | "Dermatologist" | "Orthopedic" | "Neurologist" | "Gynecologist" | "Pediatrician" | "ENT Specialist" | "Diabetologist"
+  specialization String
+  experience     Int
+  available      Boolean            @default(true)
+  status         String             @default("ACTIVE") // "ACTIVE" | "INACTIVE"
+  assignments    DoctorAssignment[]
+  assignedReports PatientReport[]   @relation("AssignedDoctor")
+}
+
+model PatientReport {
+  id               String             @id @default(uuid())
+  patientId        String
+  patient          PatientProfile     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  filePath         String?            // Local server path of uploaded file
+  symptoms         String
+  reportTranscript String             // Extracted transcript or manual text input
+  aiResult         String?            // Stringified JSON containing suggestedCategory, confidence, urgency, reason, keywords, manualReviewRequired
+  status           String             @default("PENDING") // PENDING, PROCESSING, ASSIGNED, REVIEWED
+  assignedDoctorId String?
+  assignedDoctor   DoctorProfile?     @relation("AssignedDoctor", fields: [assignedDoctorId], references: [id], onDelete: SetNull)
+  assignments      DoctorAssignment[]
+  aiLogs           AIAnalysisLog[]
+  createdAt        DateTime           @default(now())
+}
+
+model DoctorAssignment {
+  id           String        @id @default(uuid())
+  reportId     String
+  report       PatientReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  doctorId     String
+  doctor       DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  assignedBy   String        // "AI" | "ADMIN"
+  reviewStatus String        @default("PENDING") // "PENDING" | "REVIEWED"
+  reviewedAt   DateTime?
+  createdAt    DateTime      @default(now())
+}
+
+model AIAnalysisLog {
+  id              String        @id @default(uuid())
+  reportId        String
+  report          PatientReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  inputTranscript String
+  modelUsed       String
+  responseJson    String
+  success         Boolean
+  error           String?
+  createdAt       DateTime      @default(now())
+}

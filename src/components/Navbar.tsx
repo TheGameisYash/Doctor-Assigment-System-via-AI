@@ -33,7 +33,7 @@ export default function Navbar() {
       } else {
         setUser(null);
         // If we are on a protected page (patient, doctor, admin) and the auth check fails,
-        // we should clear the token cookie and redirect to the correct login page.
+        // we should clear the token cookie via POST logout and redirect to the correct login page.
         const isProtectedRoute = pathname.startsWith('/patient') || 
                                  pathname.startsWith('/admin') || 
                                  pathname.startsWith('/doctor');
@@ -42,18 +42,19 @@ export default function Navbar() {
                             pathname === '/doctor/login';
         
         if (isProtectedRoute && !isLoginPage) {
-          // Clear cookie client-side
-          document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;';
-          
-          // Determine redirect destination
-          let redirectUrl = '/login';
-          if (pathname.startsWith('/admin')) {
-            redirectUrl = '/admin/login';
-          } else if (pathname.startsWith('/doctor')) {
-            redirectUrl = '/doctor/login';
-          }
-          
-          window.location.href = redirectUrl;
+          // Clear httpOnly cookie by calling the logout endpoint first, then redirect
+          fetch('/api/auth/me', { method: 'POST' })
+            .catch(() => {})
+            .finally(() => {
+              // Determine redirect destination
+              let redirectUrl = '/login';
+              if (pathname.startsWith('/admin')) {
+                redirectUrl = '/admin/login';
+              } else if (pathname.startsWith('/doctor')) {
+                redirectUrl = '/doctor/login';
+              }
+              window.location.href = redirectUrl;
+            });
         }
       }
     } catch (e) {

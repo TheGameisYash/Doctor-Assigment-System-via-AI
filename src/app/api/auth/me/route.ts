@@ -6,7 +6,15 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = getAuthUser(req);
     if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      response.cookies.set({
+        name: 'token',
+        value: '',
+        httpOnly: true,
+        path: '/',
+        expires: new Date(0),
+      });
+      return response;
     }
 
     const user = await prisma.user.findUnique({
@@ -22,7 +30,15 @@ export async function GET(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const response = NextResponse.json({ error: 'User not found' }, { status: 404 });
+      response.cookies.set({
+        name: 'token',
+        value: '',
+        httpOnly: true,
+        path: '/',
+        expires: new Date(0),
+      });
+      return response;
     }
 
     const profile = user.role === 'PATIENT' ? user.patientProfile : user.role === 'DOCTOR' ? user.doctorProfile : null;
